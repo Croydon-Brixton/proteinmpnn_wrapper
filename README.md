@@ -7,3 +7,11 @@ git clone --recurse-submodules https://github.com/Croydon-Brixton/proteinmpnn_wr
 cd proteinmpnn_wrapper
 pip install .
 ```
+
+Use via
+```python
+import proteinmpnn
+from proteinmpnn.run import load_protein_mpnn_model, design_sequences, untokenise_sequence
+```
+
+See [the example notebook](./example.ipynb) for more an example.
