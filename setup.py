@@ -4,7 +4,6 @@ from os.path import join, abspath, dirname, normpath
 import fnmatch
 import os
 from setuptools import setup, find_packages, Extension
-import numpy
 
 original_wd = os.getcwd()
 # Change directory to setup directory to ensure correct file identification
@@ -27,6 +26,7 @@ if version is None:
     raise ValueError("Unable to identify 'version' in __init__.py")
 
 setup(
+    name="proteinmpnn",
     version = version,
     zip_safe = False,
     packages = find_packages("src"),

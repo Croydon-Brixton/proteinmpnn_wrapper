@@ -58,11 +58,6 @@ classifiers = [
 # as of 2022-01 for 3.7 "numpy >= 1.14.5", for 3.8 "numpy >= 1.17.3", for 3.9 "numpy >= 1.19.3"
 # this should be manually updated as the minimum python version increases
 dependencies = [
-  "numpy >= 1.14.5",
-  "pandas >= 1.0.0",
-  "numba",
-  "torch",
-  "joblib",
 ]
 dynamic = ["version"]
 
