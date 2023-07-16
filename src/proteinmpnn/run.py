@@ -28,12 +28,25 @@ def untokenise_sequence(x: torch.Tensor) -> str:
 
 
 def _set_seed(seed: int):
+    """Set random seeds"""
     if seed is None:
         seed = int(np.random.randint(0, high=int(1e5), size=1, dtype=int)[0])
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
     logger.debug(f"Set seed to %d" % seed)
+
+
+def _nll_score(tokenised_seq: torch.Tensor, log_probs: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+    """Compute negative log likelihood probabilities for a given sequence."""
+    if mask is None:
+        mask = torch.ones_like(tokenised_seq)
+    criterion = torch.nn.NLLLoss(reduction="none")
+    loss = criterion(log_probs.contiguous().view(-1, log_probs.size(-1)), tokenised_seq.contiguous().view(-1)).view(
+        tokenised_seq.size()
+    )
+    score = torch.sum(loss * mask, dim=-1) / torch.sum(mask, dim=-1)
+    return score
 
 
 def load_protein_structure(
@@ -118,9 +131,9 @@ def prepare_structure_for_mpnn(protein: bs.AtomArray, chain: str, ca_only: bool 
 
     if ca_only:
         backbone = backbone[backbone.atom_name == "CA"]
-        coords = torch.tensor(backbone.coord.reshape(1, -1, 3), dtype=torch.float32)
+        coords = torch.from_numpy(backbone.coord).view(1, -1, 3).to(torch.float32)
     else:
-        coords = torch.tensor(backbone.coord.reshape(1, -1, 4, 3), dtype=torch.float32)
+        coords = torch.from_numpy(backbone.coord).view(1, -1, 4, 3).to(torch.float32)
 
     seq = bs.residues.get_residues(backbone[backbone.chain_id == chain])[1]
     seq = "".join([AA_3_TO_1[res] for res in seq])
@@ -135,19 +148,6 @@ def prepare_structure_for_mpnn(protein: bs.AtomArray, chain: str, ca_only: bool 
     return coords, tokenised_seq, mask, chain_M, residue_idx, chain_encoding_all, randn
 
 
-class BackboneDataset(torch.utils.data.Dataset):
-    def __init__(self, samples: list, ca_only: bool = True):
-        self.samples = samples
-        self.ca_only = ca_only
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        structure = load_protein_structure(self.samples[idx], ca_only=self.ca_only)
-        return prepare_structure_for_mpnn(structure, "A", ca_only=self.ca_only)
-
-
 def design_sequences(
     inputs,
     model: "ProteinMPNN",
@@ -155,6 +155,7 @@ def design_sequences(
     num_seq_per_target: int = 1,
     batch_size: int = 1,
     seed: int = 38,
+    compute_scores: bool = False,
 ) -> list:
     if batch_size > 1:
         # TODO: implement batched sampling
@@ -192,25 +193,43 @@ def design_sequences(
         with torch.inference_mode():
             for _ in range(num_seq_per_target):
                 randn = torch.randn_like(randn)
-                samples.append(
-                    model.sample(
-                        X,
-                        randn,
-                        S,
-                        chain_M,
-                        chain_encoding_all,
-                        residue_idx,
-                        mask=mask,
-                        temperature=sampling_temp,
-                        chain_M_pos=torch.ones_like(chain_M),
-                        omit_AA_mask=omit_AA_mask,
-                        omit_AAs_np=omit_AAs_np,
-                        bias_AAs_np=bias_AAs_np,
-                        bias_by_res=bias_by_res,
-                        pssm_bias_flag=False,
-                        pssm_log_odds_flag=False,
-                        pssm_log_odds_mask=pssm_log_odds_mask,
-                        pssm_bias=pssm_bias,
-                    )
+                sample = model.sample(
+                    X,
+                    randn,
+                    S,
+                    chain_M,
+                    chain_encoding_all,
+                    residue_idx,
+                    mask=mask,
+                    temperature=sampling_temp,
+                    chain_M_pos=torch.ones_like(chain_M),
+                    omit_AA_mask=omit_AA_mask,
+                    omit_AAs_np=omit_AAs_np,
+                    bias_AAs_np=bias_AAs_np,
+                    bias_by_res=bias_by_res,
+                    pssm_bias_flag=False,
+                    pssm_log_odds_flag=False,
+                    pssm_log_odds_mask=pssm_log_odds_mask,
+                    pssm_bias=pssm_bias,
                 )
+                if compute_scores:
+                    # NOTE: Score with another forward pass because the sampling pass
+                    #       probabilities will be correlated with the predicted sequence
+                    #       and will not be a true measure of the model's confidence in
+                    #       the sampled sequence.
+                    randn_2 = torch.randn_like(randn)
+                    log_probs = model(
+                        X,
+                        sample["S"],
+                        mask,
+                        chain_M,
+                        residue_idx,
+                        chain_encoding_all,
+                        randn_2,
+                        use_input_decoding_order=True,
+                        decoding_order=sample["decoding_order"],
+                    )
+                    sample["nll_score"] = _nll_score(sample["S"], log_probs, mask=mask)
+                    sample["prob"] = torch.exp(-sample["nll_score"])
+                samples.append(sample)
     return samples
