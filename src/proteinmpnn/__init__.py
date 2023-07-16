@@ -1,2 +1,1 @@
-from . import ProteinMPNN
-from . import process
+from . import process, utils
