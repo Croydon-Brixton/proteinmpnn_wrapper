@@ -1,9 +1,8 @@
 import gzip
-import inspect
 import io
 import os
 import pathlib
-from typing import Callable, Dict, Union
+from typing import Union
 
 import biotite.structure as bs
 import numpy as np
@@ -11,6 +10,7 @@ from biotite.structure.io import mmtf, pdb, pdbx
 
 from ..constants import AA_1_TO_3
 from .log_utils import get_logger
+from .misc import filter_kwargs
 
 logger = get_logger(__name__)
 
@@ -78,30 +78,6 @@ def atom_array_from_numpy(
         atom_array.res_id = np.repeat(np.arange(1, n_residues + 1), 4)
 
     return atom_array
-
-
-def filter_kwargs(kwargs: Dict, obj: Callable) -> Dict:
-    """Filter kwargs to only those accepted by the given object.
-    Raises a warning if any kwargs are filtered out.
-
-    Args:
-        kwargs (Dict): Dictionary of kwargs to filter.
-        obj (Callable): Object to filter kwargs for.
-
-    Returns:
-        Dict: Filtered kwargs.
-    """
-    sig = inspect.signature(obj)
-    filter_keys = [param.name for param in sig.parameters.values() if param.kind == param.POSITIONAL_OR_KEYWORD]
-    filtered, rejected = {}, []
-    for k, v in kwargs.items():
-        if k in filter_keys:
-            filtered[k] = v
-        else:
-            rejected.append(k)
-    if len(rejected) > 0:
-        logger.warning("In `%s`, the following kwargs were rejected: %s", obj.__name__, rejected)
-    return filtered
 
 
 def structure_from_buffer(buffer: Union[io.StringIO, io.BytesIO], file_type: str, **load_kwargs) -> bs.AtomArray:

@@ -24,7 +24,7 @@ def tokenise_sequence(seq: str) -> torch.Tensor:
 
 def untokenise_sequence(x: torch.Tensor) -> str:
     assert x.dtype == torch.long
-    return "".join([_REVERSE_ALPHABET[i] for i in x.squeeze()])
+    return "".join([_REVERSE_ALPHABET[i.item()] for i in x.squeeze()])
 
 
 def _set_seed(seed: int):
@@ -124,7 +124,7 @@ def prepare_structure_for_mpnn(protein: bs.AtomArray, chain: str, ca_only: bool 
 
     seq = bs.residues.get_residues(backbone[backbone.chain_id == chain])[1]
     seq = "".join([AA_3_TO_1[res] for res in seq])
-    tokenised_seq = torch.tensor(tokenise_sequence(seq), dtype=torch.long).unsqueeze(0)
+    tokenised_seq = tokenise_sequence(seq).unsqueeze(0)
 
     mask = torch.ones_like(tokenised_seq, dtype=torch.float32)
     chain_M = torch.ones_like(tokenised_seq, dtype=torch.float32)
@@ -149,7 +149,7 @@ class BackboneDataset(torch.utils.data.Dataset):
 
 
 def design_sequences(
-    file_or_buffer_or_obj,
+    inputs,
     model: "ProteinMPNN",
     sampling_temp: float = 0.1,
     num_seq_per_target: int = 1,
@@ -165,51 +165,52 @@ def design_sequences(
     model.device
     ca_only = model.ca_only
 
-    # Sample loading (turn into torch data loader)
-    structure = load_protein_structure(file_or_buffer_or_obj, ca_only=ca_only)
-
-    X, S, mask, chain_M, residue_idx, chain_encoding_all, randn = prepare_structure_for_mpnn(
-        structure, "A", ca_only=ca_only
-    )
-
-    # Amino acids that are not allowed to be sampled at a given position
-    omit_AA_mask = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
-    omit_AAs_np = np.zeros(21)
-    omit_AAs_np[-1] = 1.0  # disallow the `mask` token
-
-    # Amino acids that are preferred to be sampled
-    bias_AAs_np = np.zeros(21)
-    bias_by_res = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
-
-    # PSSM (position-specific scoring matrix) bias
-    pssm_log_odds_mask = torch.ones((1, S.shape[1], 21), dtype=torch.float32)
-    pssm_bias = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
-    pssm_coef = torch.zeros((1, S.shape[1]), dtype=torch.float32)
-
-    # Evaluation
     samples = []
-    with torch.inference_mode():
-        for _ in range(num_seq_per_target):
-            randn = torch.randn_like(randn)
-            samples.append(
-                model.sample(
-                    X,
-                    randn,
-                    S,
-                    chain_M,
-                    chain_encoding_all,
-                    residue_idx,
-                    mask=mask,
-                    temperature=sampling_temp,
-                    chain_M_pos=torch.ones_like(chain_M),
-                    omit_AA_mask=omit_AA_mask,
-                    omit_AAs_np=omit_AAs_np,
-                    bias_AAs_np=bias_AAs_np,
-                    bias_by_res=bias_by_res,
-                    pssm_bias_flag=False,
-                    pssm_log_odds_flag=False,
-                    pssm_log_odds_mask=pssm_log_odds_mask,
-                    pssm_bias=pssm_bias,
+    for input in inputs:
+        # Sample loading (turn into torch data loader)
+        structure = load_protein_structure(input, ca_only=ca_only)
+
+        X, S, mask, chain_M, residue_idx, chain_encoding_all, randn = prepare_structure_for_mpnn(
+            structure, "A", ca_only=ca_only
+        )
+
+        # Amino acids that are not allowed to be sampled at a given position
+        omit_AA_mask = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
+        omit_AAs_np = np.zeros(21)
+        omit_AAs_np[-1] = 1.0  # disallow the `mask` token
+
+        # Amino acids that are preferred to be sampled
+        bias_AAs_np = np.zeros(21)
+        bias_by_res = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
+
+        # PSSM (position-specific scoring matrix) bias
+        pssm_log_odds_mask = torch.ones((1, S.shape[1], 21), dtype=torch.float32)
+        pssm_bias = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
+        pssm_coef = torch.zeros((1, S.shape[1]), dtype=torch.float32)
+
+        # Evaluation
+        with torch.inference_mode():
+            for _ in range(num_seq_per_target):
+                randn = torch.randn_like(randn)
+                samples.append(
+                    model.sample(
+                        X,
+                        randn,
+                        S,
+                        chain_M,
+                        chain_encoding_all,
+                        residue_idx,
+                        mask=mask,
+                        temperature=sampling_temp,
+                        chain_M_pos=torch.ones_like(chain_M),
+                        omit_AA_mask=omit_AA_mask,
+                        omit_AAs_np=omit_AAs_np,
+                        bias_AAs_np=bias_AAs_np,
+                        bias_by_res=bias_by_res,
+                        pssm_bias_flag=False,
+                        pssm_log_odds_flag=False,
+                        pssm_log_odds_mask=pssm_log_odds_mask,
+                        pssm_bias=pssm_bias,
+                    )
                 )
-            )
     return samples
