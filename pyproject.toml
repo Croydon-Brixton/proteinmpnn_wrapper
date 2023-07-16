@@ -14,16 +14,15 @@ exclude = '''
   | .env
   | venv
   | .venv
-  | venv_gpu
-  | .venv_gpu
   | ProteinMPNN
+  | src/proteinmpnn/ProteinMPNN
 )/
 '''
 line-length = 120
 target-version = ['py310']
 
 [tool.isort]
-skip = [".env", "env", ".venv", "venv", "notebooks", "data", "venv_gpu", ".venv_gpu", "ProteinMPNN"]
+skip = [".env", "env", ".venv", "venv", "notebooks", "data", "src/proteinmpnn/ProteinMPNN"]
 ensure_newline_before_comments = true
 force_grid_wrap = 0
 include_trailing_comma = true
