@@ -1,0 +1,75 @@
+[tool.black]
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | env
+  | .env
+  | venv
+  | .venv
+  | venv_gpu
+  | .venv_gpu
+  | ProteinMPNN
+)/
+'''
+line-length = 120
+target-version = ['py310']
+
+[tool.isort]
+skip = [".env", "env", ".venv", "venv", "notebooks", "data", "venv_gpu", ".venv_gpu", "ProteinMPNN"]
+ensure_newline_before_comments = true
+force_grid_wrap = 0
+include_trailing_comma = true
+line_length = 120 # match our custom config above
+multi_line_output = 3
+float_to_top = true
+use_parentheses = true
+skip_glob = "**/*.pyx"
+
+[project]
+name = "proteinmpnn"
+requires-python = ">=3.7"
+description = "A thin wrapper around the ProteinMPNN repo for more user-friendliness. All credit to Justas Dauparas for ProteinMPNN."
+readme = "README.md"
+authors = [{name = "Simon Mathis", email="simon.mathis@cl.cam.ac.uk"}]
+license = {"file" = "LICENSE"}
+
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+# Based on https://github.com/scipy/oldest-supported-numpy/blob/main/setup.cfg
+# When updating our minimum supported python version follow minimums set in this setup.cfg
+# as of 2022-01 for 3.7 "numpy >= 1.14.5", for 3.8 "numpy >= 1.17.3", for 3.9 "numpy >= 1.19.3"
+# this should be manually updated as the minimum python version increases
+dependencies = [
+  "numpy >= 1.14.5",
+  "pandas >= 1.0.0",
+  "numba",
+  "torch",
+  "joblib",
+]
+dynamic = ["version"]
+
+[build-system]
+# This is needed to build the Cython extensions (python runs setup in subprocesses, which don't inherit the environment)
+requires = [
+    "setuptools >= 0.30",
+    "wheel >= 0.30",
+]
+build-backend = "setuptools.build_meta"
