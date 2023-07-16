@@ -104,8 +104,10 @@ def load_protein_mpnn_model(
     model.to(device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
+
+    # Set flag to mark whether the model is for CA atoms only
     model.ca_only = True if model_type == "ca" else False
-    logger.info("Model loaded")
+    model.device = device
 
     return model
 
@@ -133,16 +135,44 @@ def prepare_structure_for_mpnn(protein: bs.AtomArray, chain: str, ca_only: bool 
     return coords, tokenised_seq, mask, chain_M, residue_idx, chain_encoding_all, randn
 
 
-def design_sequences(file_or_buffer_or_obj, model, temp=0.1, n_samples=3, seed=38):
+class BackboneDataset(torch.utils.data.Dataset):
+    def __init__(self, samples: list, ca_only: bool = True):
+        self.samples = samples
+        self.ca_only = ca_only
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        structure = load_protein_structure(self.samples[idx], ca_only=self.ca_only)
+        return prepare_structure_for_mpnn(structure, "A", ca_only=self.ca_only)
+
+
+def design_sequences(
+    file_or_buffer_or_obj,
+    model: "ProteinMPNN",
+    sampling_temp: float = 0.1,
+    num_seq_per_target: int = 1,
+    batch_size: int = 1,
+    seed: int = 38,
+) -> list:
+    if batch_size > 1:
+        # TODO: implement batched sampling
+        raise NotImplementedError("Batched sampling not implemented yet.")
+
     _set_seed(seed)
 
-    structure = load_protein_structure(file_or_buffer_or_obj, ca_only=model.ca_only)
+    model.device
+    ca_only = model.ca_only
+
+    # Sample loading (turn into torch data loader)
+    structure = load_protein_structure(file_or_buffer_or_obj, ca_only=ca_only)
 
     X, S, mask, chain_M, residue_idx, chain_encoding_all, randn = prepare_structure_for_mpnn(
-        structure, "A", ca_only=model.ca_only
+        structure, "A", ca_only=ca_only
     )
 
-    # Amino acids that are not allowed to be sampled
+    # Amino acids that are not allowed to be sampled at a given position
     omit_AA_mask = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
     omit_AAs_np = np.zeros(21)
     omit_AAs_np[-1] = 1.0  # disallow the `mask` token
@@ -156,28 +186,30 @@ def design_sequences(file_or_buffer_or_obj, model, temp=0.1, n_samples=3, seed=3
     pssm_bias = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
     pssm_coef = torch.zeros((1, S.shape[1]), dtype=torch.float32)
 
+    # Evaluation
     samples = []
-    for i in range(n_samples):
-        randn = torch.randn_like(randn)
-        samples.append(
-            model.sample(
-                X,
-                randn,
-                S,
-                chain_M,
-                chain_encoding_all,
-                residue_idx,
-                mask=mask,
-                temperature=temp,
-                chain_M_pos=torch.ones_like(chain_M),
-                omit_AA_mask=omit_AA_mask,
-                omit_AAs_np=omit_AAs_np,
-                bias_AAs_np=bias_AAs_np,
-                bias_by_res=bias_by_res,
-                pssm_bias_flag=False,
-                pssm_log_odds_flag=False,
-                pssm_log_odds_mask=pssm_log_odds_mask,
-                pssm_bias=pssm_bias,
+    with torch.inference_mode():
+        for _ in range(num_seq_per_target):
+            randn = torch.randn_like(randn)
+            samples.append(
+                model.sample(
+                    X,
+                    randn,
+                    S,
+                    chain_M,
+                    chain_encoding_all,
+                    residue_idx,
+                    mask=mask,
+                    temperature=sampling_temp,
+                    chain_M_pos=torch.ones_like(chain_M),
+                    omit_AA_mask=omit_AA_mask,
+                    omit_AAs_np=omit_AAs_np,
+                    bias_AAs_np=bias_AAs_np,
+                    bias_by_res=bias_by_res,
+                    pssm_bias_flag=False,
+                    pssm_log_odds_flag=False,
+                    pssm_log_odds_mask=pssm_log_odds_mask,
+                    pssm_bias=pssm_bias,
+                )
             )
-        )
     return samples
