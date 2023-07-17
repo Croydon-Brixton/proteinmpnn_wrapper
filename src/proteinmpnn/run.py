@@ -9,7 +9,7 @@ from .utils.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-__all__ = ["load_protein_structure", "load_protein_mpnn_model", "design_sequences"]
+__all__ = ["load_protein_mpnn_model", "nll_score", "set_seed"]
 
 
 def set_seed(seed: int):
