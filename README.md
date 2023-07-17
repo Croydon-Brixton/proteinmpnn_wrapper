@@ -11,7 +11,8 @@ pip install .
 Use via
 ```python
 import proteinmpnn
-from proteinmpnn.run import load_protein_mpnn_model, design_sequences, untokenise_sequence
+from proteinmpnn.run import load_protein_mpnn_model
+from proteinmpnn.data import BackboneSample
 ```
 
 See [the example notebook](./example.ipynb) for more an example.
