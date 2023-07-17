@@ -1,7 +1,7 @@
 import io
 import pathlib
 import random
-from typing import Union
+from typing import Union, Optional
 
 import biotite.structure as bs
 import numpy as np
@@ -83,7 +83,7 @@ def load_protein_structure(
 
 
 def load_protein_mpnn_model(
-    model_type="vanilla", model_name="v_48_020", backbone_noise: float = 0.0, device: str = "cpu"
+    model_type="vanilla", model_name="v_48_020", backbone_noise: float = 0.0, device: Optional[str] = None
 ):
     assert (
         model_type in PROTEIN_MPNN_MODELS.keys()
@@ -95,6 +95,8 @@ def load_protein_mpnn_model(
     checkpoint_path = PROTEIN_MPNN_MODELS[model_type][model_name]
     hidden_dim = 128
     num_layers = 3
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
     logger.info("Number of edges: %s", str(checkpoint["num_edges"]))
@@ -155,7 +157,7 @@ def design_sequences(
     num_seq_per_target: int = 1,
     batch_size: int = 1,
     seed: int = 38,
-    compute_scores: bool = False,
+    compute_scores: bool = True,
 ) -> list:
     if batch_size > 1:
         # TODO: implement batched sampling
@@ -163,7 +165,7 @@ def design_sequences(
 
     _set_seed(seed)
 
-    model.device
+    device = model.device
     ca_only = model.ca_only
 
     samples = []
@@ -174,25 +176,33 @@ def design_sequences(
         X, S, mask, chain_M, residue_idx, chain_encoding_all, randn = prepare_structure_for_mpnn(
             structure, "A", ca_only=ca_only
         )
+        # Transfer to device
+        X = X.to(device)
+        S = S.to(device)
+        mask = mask.to(device)
+        chain_M = chain_M.to(device)
+        residue_idx = residue_idx.to(device)
+        chain_encoding_all = chain_encoding_all.to(device)
+        randn = randn.to(device)
 
         # Amino acids that are not allowed to be sampled at a given position
-        omit_AA_mask = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
+        omit_AA_mask = torch.zeros((1, S.shape[1], 21), dtype=torch.float32, device=device)
         omit_AAs_np = np.zeros(21)
         omit_AAs_np[-1] = 1.0  # disallow the `mask` token
 
         # Amino acids that are preferred to be sampled
         bias_AAs_np = np.zeros(21)
-        bias_by_res = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
+        bias_by_res = torch.zeros((1, S.shape[1], 21), dtype=torch.float32, device=device)
 
         # PSSM (position-specific scoring matrix) bias
-        pssm_log_odds_mask = torch.ones((1, S.shape[1], 21), dtype=torch.float32)
-        pssm_bias = torch.zeros((1, S.shape[1], 21), dtype=torch.float32)
-        pssm_coef = torch.zeros((1, S.shape[1]), dtype=torch.float32)
+        pssm_log_odds_mask = torch.ones((1, S.shape[1], 21), dtype=torch.float32, device=device)
+        pssm_bias = torch.zeros((1, S.shape[1], 21), dtype=torch.float32, device=device)
+        pssm_coef = torch.zeros((1, S.shape[1]), dtype=torch.float32, device=device)
 
         # Evaluation
         with torch.inference_mode():
             for _ in range(num_seq_per_target):
-                randn = torch.randn_like(randn)
+                randn = torch.randn_like(randn, device=device)
                 sample = model.sample(
                     X,
                     randn,
@@ -202,7 +212,7 @@ def design_sequences(
                     residue_idx,
                     mask=mask,
                     temperature=sampling_temp,
-                    chain_M_pos=torch.ones_like(chain_M),
+                    chain_M_pos=torch.ones_like(chain_M, device=device),
                     omit_AA_mask=omit_AA_mask,
                     omit_AAs_np=omit_AAs_np,
                     bias_AAs_np=bias_AAs_np,
