@@ -6,9 +6,9 @@ import biotite.structure as bs
 import numpy as np
 import torch
 
-from proteinmpnn.constants import AA_1_TO_3, AA_3_TO_1, PROTEIN_MPNN_ALPHABET
-from proteinmpnn.utils.biotite_utils import load_structure
-from proteinmpnn.utils.misc import filter_kwargs
+from .constants import AA_1_TO_3, AA_3_TO_1, PROTEIN_MPNN_ALPHABET
+from .utils.biotite_utils import load_structure
+from .utils.misc import filter_kwargs
 
 _REVERSE_ALPHABET = {v: k for k, v in PROTEIN_MPNN_ALPHABET.items()}
 
