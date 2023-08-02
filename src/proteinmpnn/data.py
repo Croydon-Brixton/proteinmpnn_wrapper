@@ -13,8 +13,8 @@ from .utils.misc import filter_kwargs
 _REVERSE_ALPHABET = {v: k for k, v in PROTEIN_MPNN_ALPHABET.items()}
 
 
-def tokenise_sequence(seq: str) -> torch.Tensor:
-    return torch.tensor([PROTEIN_MPNN_ALPHABET[aa] for aa in seq], dtype=torch.long)
+def tokenise_sequence(seq: str, device="cuda") -> torch.Tensor:
+    return torch.tensor([PROTEIN_MPNN_ALPHABET[aa] for aa in seq], dtype=torch.long, device=device)
 
 
 def untokenise_sequence(x: torch.Tensor) -> str:
@@ -239,7 +239,7 @@ class BackboneSample:
         else:
             raise ValueError(f"Invalid mode {mode}. Must be 'sampling' or 'scoring'.")
 
-    def _to_protein_mpnn_sampling_input(self) -> dict:
+    def _to_protein_mpnn_sampling_input(self, device="cuda") -> dict:
         chain_names = np.unique(self.chain_id)
         chain_names.sort()
         chain_labels = np.arange(len(chain_names))
@@ -251,34 +251,34 @@ class BackboneSample:
         omit_AAs_np[-1] = 1.0  # disallow the `mask` token
         bias_AAs_np = np.zeros(21)
         # PSSM (position-specific scoring matrix) bias
-        pssm_log_odds_mask = torch.ones((self.n_residues, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32)
-        pssm_bias = torch.zeros((self.n_residues, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32)
-        pssm_coef = torch.zeros((self.n_residues), dtype=torch.float32)
+        pssm_log_odds_mask = torch.ones((self.n_residues, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32, device=device)
+        pssm_bias = torch.zeros((self.n_residues, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32, device=device)
+        pssm_coef = torch.zeros((self.n_residues), dtype=torch.float32, device=device)
 
         return {
-            "X": torch.as_tensor(self.bb_coords, dtype=torch.float32).unsqueeze(0),  # Backbone coordinates
+            "X": torch.as_tensor(self.bb_coords, dtype=torch.float32, device=device).unsqueeze(0),  # Backbone coordinates
             "S_true": tokenise_sequence(self.res_name).unsqueeze(0),  # Amino acid sequence as tokenised integers
-            "mask": torch.as_tensor(self.res_mask, dtype=torch.float32).unsqueeze(
+            "mask": torch.as_tensor(self.res_mask, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # True if residue is allowed to be sampled
-            "omit_AA_mask": torch.as_tensor(self.res_disallowed_mask, dtype=torch.float32).unsqueeze(
+            "omit_AA_mask": torch.as_tensor(self.res_disallowed_mask, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # True if residue is disallowed
-            "chain_mask": torch.as_tensor(self.chain_mask, dtype=torch.float32).unsqueeze(
+            "chain_mask": torch.as_tensor(self.chain_mask, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # True if atoms in chain are allowed to be sampled
             "chain_encoding_all": torch.as_tensor(
-                [chain_encoding[chain] + 1 for chain in self.chain_id], dtype=torch.long
+                [chain_encoding[chain] + 1 for chain in self.chain_id], dtype=torch.long, device=device
             ).unsqueeze(
                 0
             ),  # Integer encoding of chain ID for each atom
-            "residue_idx": torch.as_tensor(self.res_id - 1, dtype=torch.long).unsqueeze(0),  # Residue indices
-            "chain_M_pos": torch.as_tensor(self.chain_mask, dtype=torch.float32).unsqueeze(
+            "residue_idx": torch.as_tensor(self.res_id - 1, dtype=torch.long, device=device).unsqueeze(0),  # Residue indices
+            "chain_M_pos": torch.as_tensor(self.chain_mask, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # True if atoms in chain are allowed to be sampled
             "omit_AAs_np": omit_AAs_np,  # Amino acids that are not allowed to be sampled at a given position
             "bias_AAs_np": bias_AAs_np,  # Amino acids that are preferred to be sampled
-            "bias_by_res": torch.as_tensor(self.res_bias, dtype=torch.float32).unsqueeze(
+            "bias_by_res": torch.as_tensor(self.res_bias, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # Amino acids that are preferred to be sampled (by residue
             "pssm_log_odds_mask": pssm_log_odds_mask.unsqueeze(0),  # PSSM (position-specific scoring matrix) mask
@@ -286,49 +286,49 @@ class BackboneSample:
             "pssm_coef": pssm_coef.unsqueeze(0),  # PSSM (position-specific scoring matrix) coefficient
         }
 
-    def _to_protein_mpnn_scoring_input(self) -> dict:
+    def _to_protein_mpnn_scoring_input(self, device="cuda") -> dict:
         chain_names = np.unique(self.chain_id)
         chain_names.sort()
         chain_labels = np.arange(len(chain_names))
         chain_encoding = dict(zip(chain_names, chain_labels))
 
         return {
-            "X": torch.as_tensor(self.bb_coords, dtype=torch.float32).unsqueeze(0),  # Backbone coordinates
+            "X": torch.as_tensor(self.bb_coords, dtype=torch.float32, device=device).unsqueeze(0),  # Backbone coordinates
             "S": tokenise_sequence(self.res_name).unsqueeze(0),  # Amino acid sequence as tokenised integers
-            "mask": torch.as_tensor(self.res_mask, dtype=torch.float32).unsqueeze(
+            "mask": torch.as_tensor(self.res_mask, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # True if residue is allowed to be sampled
-            "chain_M": torch.as_tensor(self.chain_mask, dtype=torch.float32).unsqueeze(
+            "chain_M": torch.as_tensor(self.chain_mask, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # True if atoms in chain are allowed to be sampled
             "chain_encoding_all": torch.as_tensor(
-                [chain_encoding[chain] + 1 for chain in self.chain_id], dtype=torch.long
+                [chain_encoding[chain] + 1 for chain in self.chain_id], dtype=torch.long, device=device
             ).unsqueeze(
                 0
             ),  # Integer encoding of chain ID for each atom
-            "residue_idx": torch.as_tensor(self.res_id - 1, dtype=torch.long).unsqueeze(0),  # Residue indices
+            "residue_idx": torch.as_tensor(self.res_id - 1, dtype=torch.long, device=device).unsqueeze(0),  # Residue indices
         }
 
     @classmethod
-    def _collate_protein_mpnn_sampling_input(cls, samples: list):
+    def _collate_protein_mpnn_sampling_input(cls, samples: list, device="cuda"):
         max_seq_len = max([sample["S_true"].shape[1] for sample in samples])
         max_n_atoms = max([sample["X"].shape[1] for sample in samples])
         n_samples = len(samples)
 
         # Padded default values
         batch = dict(
-            X=torch.zeros((n_samples, max_n_atoms, 3), dtype=torch.float32),
-            S_true=torch.ones((n_samples, max_seq_len), dtype=torch.long) * (len(PROTEIN_MPNN_ALPHABET) - 1),
-            mask=torch.zeros((n_samples, max_seq_len), dtype=torch.float32),
-            omit_AA_mask=torch.zeros((n_samples, max_seq_len, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32),
-            chain_mask=torch.zeros((n_samples, max_n_atoms), dtype=torch.float32),
-            chain_encoding_all=torch.zeros((n_samples, max_n_atoms), dtype=torch.long),
-            residue_idx=torch.zeros((n_samples, max_n_atoms), dtype=torch.long) - 1,
-            chain_M_pos=torch.zeros((n_samples, max_n_atoms), dtype=torch.float32),
-            bias_by_res=torch.zeros((n_samples, max_seq_len, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32),
-            pssm_log_odds_mask=torch.zeros((n_samples, max_seq_len, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32),
-            pssm_bias=torch.zeros((n_samples, max_seq_len, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32),
-            pssm_coef=torch.zeros((n_samples, max_seq_len), dtype=torch.float32),
+            X=torch.zeros((n_samples, max_n_atoms, 3), dtype=torch.float32, device=device),
+            S_true=torch.ones((n_samples, max_seq_len), dtype=torch.long, device=device) * (len(PROTEIN_MPNN_ALPHABET) - 1),
+            mask=torch.zeros((n_samples, max_seq_len), dtype=torch.float32, device=device),
+            omit_AA_mask=torch.zeros((n_samples, max_seq_len, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32, device=device),
+            chain_mask=torch.zeros((n_samples, max_n_atoms), dtype=torch.float32, device=device),
+            chain_encoding_all=torch.zeros((n_samples, max_n_atoms), dtype=torch.long, device=device),
+            residue_idx=torch.zeros((n_samples, max_n_atoms), dtype=torch.long, device=device) - 1,
+            chain_M_pos=torch.zeros((n_samples, max_n_atoms), dtype=torch.float32, device=device),
+            bias_by_res=torch.zeros((n_samples, max_seq_len, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32, device=device),
+            pssm_log_odds_mask=torch.zeros((n_samples, max_seq_len, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32, device=device),
+            pssm_bias=torch.zeros((n_samples, max_seq_len, len(PROTEIN_MPNN_ALPHABET)), dtype=torch.float32, device=device),
+            pssm_coef=torch.zeros((n_samples, max_seq_len), dtype=torch.float32, device=device),
             omit_AAs_np=samples[0]["omit_AAs_np"],
             bias_AAs_np=samples[0]["bias_AAs_np"],
         )
@@ -351,19 +351,19 @@ class BackboneSample:
         return batch
 
     @classmethod
-    def _collate_protein_mpnn_scoring_input(cls, samples: list):
+    def _collate_protein_mpnn_scoring_input(cls, samples: list, device="cuda"):
         max_seq_len = max([sample["S"].shape[1] for sample in samples])
         max_n_atoms = max([sample["X"].shape[1] for sample in samples])
         n_samples = len(samples)
 
         # Padded default values
         batch = dict(
-            X=torch.zeros((n_samples, max_n_atoms, 3), dtype=torch.float32),
-            S=torch.ones((n_samples, max_seq_len), dtype=torch.long) * (len(PROTEIN_MPNN_ALPHABET) - 1),
-            mask=torch.zeros((n_samples, max_seq_len), dtype=torch.float32),
-            chain_M=torch.zeros((n_samples, max_n_atoms), dtype=torch.float32),
-            chain_encoding_all=torch.zeros((n_samples, max_n_atoms), dtype=torch.long),
-            residue_idx=torch.zeros((n_samples, max_n_atoms), dtype=torch.long) - 1,
+            X=torch.zeros((n_samples, max_n_atoms, 3), dtype=torch.float32, device=device),
+            S=torch.ones((n_samples, max_seq_len), dtype=torch.long, device=device) * (len(PROTEIN_MPNN_ALPHABET) - 1),
+            mask=torch.zeros((n_samples, max_seq_len), dtype=torch.float32, device=device),
+            chain_M=torch.zeros((n_samples, max_n_atoms), dtype=torch.float32, device=device),
+            chain_encoding_all=torch.zeros((n_samples, max_n_atoms), dtype=torch.long, device=device),
+            residue_idx=torch.zeros((n_samples, max_n_atoms), dtype=torch.long, device=device) - 1,
         )
 
         # Fill in values

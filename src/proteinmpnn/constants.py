@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 SRC_PATH = Path(os.path.abspath(__file__)).parent
+print(os.path.abspath(__file__))
 PROTEIN_MPNN_DIR = SRC_PATH / "ProteinMPNN"
 
 assert PROTEIN_MPNN_DIR.exists(), f"ProteinMPNN directory not found at {PROTEIN_MPNN_DIR}"
