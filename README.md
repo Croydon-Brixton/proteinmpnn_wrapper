@@ -35,4 +35,4 @@ sample = model.sample(
 )
 ```
 
-See [the example notebook](./example.ipynb) for more an example.
+See [the example notebook](./example.ipynb) for more examples.
