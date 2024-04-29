@@ -1,5 +1,5 @@
 import random
-from typing import Optional
+from typing import Literal, Optional
 
 import numpy as np
 import torch
@@ -35,7 +35,10 @@ def nll_score(tokenised_seq: torch.Tensor, log_probs: torch.Tensor, mask: torch.
 
 
 def load_protein_mpnn_model(
-    model_type="vanilla", model_name="v_48_020", backbone_noise: float = 0.0, device: Optional[str] = None
+    model_type: Literal["vanilla", "ca", "soluble"] = "vanilla",
+    model_name: str = "v_48_020",
+    backbone_noise: float = 0.0,
+    device: Optional[str] = None,
 ):
     assert (
         model_type in PROTEIN_MPNN_MODELS.keys()
