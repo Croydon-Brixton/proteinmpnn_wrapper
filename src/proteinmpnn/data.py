@@ -242,13 +242,15 @@ class BackboneSample:
             raise ValueError(f"Invalid mode {mode}. Must be 'sampling' or 'scoring'.")
 
     @classmethod
-    def to_protein_mpnn_batch(cls, samples: list, mode: str = Literal["sampling", "scoring"]):
-        if isinstance(samples[0], cls):
-            samples = [sample.to_protein_mpnn_input(mode=mode) for sample in samples]
+    def to_protein_mpnn_batch(
+        cls, samples: list[BackboneSample], mode: str = Literal["sampling", "scoring"], device: str = "cuda"
+    ):
+        assert isinstance(samples[0], cls), "All samples must be instances of BackboneSample."
+        samples = [sample.to_protein_mpnn_input(mode=mode) for sample in samples]
         if mode == "sampling":
-            return cls._collate_protein_mpnn_sampling_input(samples)
+            return cls._collate_protein_mpnn_sampling_input(samples, device=device)
         elif mode == "scoring":
-            return cls._collate_protein_mpnn_scoring_input(samples)
+            return cls._collate_protein_mpnn_scoring_input(samples, device=device)
         else:
             raise ValueError(f"Invalid mode {mode}. Must be 'sampling' or 'scoring'.")
 
