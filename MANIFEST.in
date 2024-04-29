@@ -1,3 +1,6 @@
 include README.md
 include LICENSE
 include pyproject.toml
+include src/proteinmpnn/ProteinMPNN/**/*.pt
+include src/proteinmpnn/ProteinMPNN/README.md
+include src/proteinmpnn/ProteinMPNN/LICENSE

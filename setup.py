@@ -4,6 +4,7 @@ from os.path import join, abspath, dirname, normpath
 import fnmatch
 import os
 from setuptools import setup, find_packages, Extension
+import subprocess
 
 original_wd = os.getcwd()
 # Change directory to setup directory to ensure correct file identification
@@ -25,17 +26,28 @@ with open(join("src", "__init__.py")) as init_file:
 if version is None:
     raise ValueError("Unable to identify 'version' in __init__.py")
 
+# Path to ProteinMPNN
+proteinmpnn_path = os.path.join("src", "proteinmpnn", "ProteinMPNN")
+proteinmpnn_init_path = os.path.join(proteinmpnn_path, '__init__.py')
+# Try calling git submodule update --init --recursive if ProteinMPNN submodule is not found
+if not os.path.exists(proteinmpnn_init_path):
+    try:
+        subprocess.run(["git", "submodule", "update", "--init", "--recursive"], check=True)
+    except subprocess.CalledProcessError as e:
+        raise FileNotFoundError(f"ProteinMPNN submodule not found at {proteinmpnn_path}. Call `git submodule update --init --recursive` to clone the submodule first, then try again.") from e
+assert os.path.exists(proteinmpnn_path), f"ProteinMPNN directory not found at {proteinmpnn_path} and could not be autocreated. Call `git submodule update --init --recursive` to clone the submodule first, then try again."
+# ... create __init__.py in ProteinMPNN submodule clone so it can be found
+if not os.path.exists(proteinmpnn_init_path):
+    with open(proteinmpnn_init_path, 'w') as f:
+        pass  # just to create an empty __init__.py file
+
 setup(
     name="proteinmpnn",
     version = version,
     zip_safe = False,
     packages = find_packages("src"),
     package_dir = {"" : "src"},
-    
-    # Including additional data
-    package_data = {
-        # TODO: Include ProteinMPNN weights
-    },
+    include_package_data=True
 )
 
 
