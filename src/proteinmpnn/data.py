@@ -26,7 +26,7 @@ def as_numpy(x: torch.Tensor | np.ndarray | list) -> np.ndarray:
         raise ValueError("Cannot convert to numpy array.")
 
 
-def tokenise_sequence(seq: str, device="cuda") -> torch.Tensor:
+def tokenise_sequence(seq: str, device: str) -> torch.Tensor:
     return torch.tensor([PROTEIN_MPNN_ALPHABET[aa] for aa in seq], dtype=torch.long, device=device)
 
 
@@ -274,7 +274,9 @@ class BackboneSample:
             "X": torch.as_tensor(self.bb_coords, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # Backbone coordinates
-            "S_true": tokenise_sequence(self.res_name).unsqueeze(0),  # Amino acid sequence as tokenised integers
+            "S_true": tokenise_sequence(self.res_name, device=device).unsqueeze(
+                0
+            ),  # Amino acid sequence as tokenised integers
             "mask": torch.as_tensor(self.res_mask, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # True if residue is allowed to be sampled
@@ -315,7 +317,9 @@ class BackboneSample:
             "X": torch.as_tensor(self.bb_coords, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # Backbone coordinates
-            "S": tokenise_sequence(self.res_name).unsqueeze(0),  # Amino acid sequence as tokenised integers
+            "S": tokenise_sequence(self.res_name, device=device).unsqueeze(
+                0
+            ),  # Amino acid sequence as tokenised integers
             "mask": torch.as_tensor(self.res_mask, dtype=torch.float32, device=device).unsqueeze(
                 0
             ),  # True if residue is allowed to be sampled
